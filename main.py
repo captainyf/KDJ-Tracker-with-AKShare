@@ -2,7 +2,7 @@ import akshare as ak
 import pandas as pd
 from datetime import datetime
 
-# ========== 配置区 ==========
+# ========== 个股代码 ==========
 STOCK_CODES = ["sh600519",  # 贵州茅台
                "sz000858",  # 五粮液
                "sh600030",  # 中信证券
