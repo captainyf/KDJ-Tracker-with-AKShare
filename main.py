@@ -17,7 +17,7 @@ class StockMonitor:
         """
         初始化 StockMonitor 类，获取股票代码和名称的映射。
         """
-        print("正在获取股票代码和名称的映射...")
+        print("开始初始化，获取股票代码和名称的映射...")
         self.stock_info = ak.stock_info_a_code_name()
         if self.stock_info.empty:
             print("未能获取到股票代码和名称的映射信息，程序终止。")
