@@ -19,7 +19,7 @@ class StockPriceMonitor:
         self.code_name_map_sh = dict(zip(self.stock_info_sh['证券代码'], self.stock_info_sh['证券简称']))
         self.code_name_map_sz = dict(zip(self.stock_info_sz['A股代码'], self.stock_info_sz['A股简称']))
         self.all_stocks_data = {}  # 存储所有股票前复权数据的dict，key=股票代码，value=DataFrame
-        self.load_stock_data_from_csv()  # 尝试从 CSV 文件加载数据
+        self.load_stock_data_from_csv()
         self.iterate_over_all_stocks()
         print("初始化完成。")
 
@@ -28,43 +28,62 @@ class StockPriceMonitor:
         遍历所有股票，获取或更新前复权日线数据。
         :return: 包含日期、开盘价、最高价、最低价、收盘价成交量、成交额和换手率的 DataFrame
         """
-        print("开始遍历所有股票，获取或更新前复权日线数据...")
+        print("开始遍历所有股票，获取前复权日线数据...")
         # 合并上海和深圳交易所的股票代码和名称映射
         all_code_name_map = {**self.code_name_map_sh, **self.code_name_map_sz}
-        for code, name in all_code_name_map.items():
-            exchange_prefix = "sh" if code in self.code_name_map_sh else "sz"
-            print(f"正在处理股票代码：{code}，名称：{name} 的日线数据...")
-            if code in self.all_stocks_data:
-                # 如果本地已有数据，获取最新日期
-                latest_date = self.all_stocks_data[code]['date'].max()
-                start_date = (pd.to_datetime(latest_date) + pd.Timedelta(days=1)).strftime("%Y%m%d")
-                df = self.fetch_price_data(exchange_prefix + code, start_date=start_date)
-                if df is not None and not df.empty:
-                    kdj_data = self.calculate_kdj(df)  # 计算KDJ指标
-                    df = pd.merge(df, kdj_data, on='date')
-                    self.all_stocks_data[code] = pd.concat([self.all_stocks_data[code], df], ignore_index=True)
-                    self.save_single_stock_data_to_csv(code, self.all_stocks_data[code])
-                    print(f"股票代码 {code} 的前复权日线数据更新完成。")
+        with tqdm(total=len(all_code_name_map), desc="获取股票数据") as pbar:
+            for stock_code, stock_name in all_code_name_map.items():
+                if stock_code in self.all_stocks_data:
+                    pbar.set_postfix_str(f"股票代码 {stock_code} 历史数据已从本地加载，正在获取最新数据...")
+                    latest_date = self.all_stocks_data[stock_code]['date'].max()
+                    start_date = (pd.to_datetime(latest_date) + pd.Timedelta(days=1)).strftime("%Y%m%d")
+                    self.fetch_and_update_stock_data(stock_code, pbar, start_date)
                 else:
-                    print(f"股票代码 {code} 没有新数据。")
-            else:
-                df = self.fetch_price_data(exchange_prefix + code)
-                if df is None:
-                    print(f"股票代码 {code} 不存在于数据集中。")
-                    continue
-                kdj_data = self.calculate_kdj(df)  # 计算KDJ指标
-                df = pd.merge(df, kdj_data, on='date')
-                self.all_stocks_data[code] = df
-                self.save_single_stock_data_to_csv(code, df)
-                print(f"股票代码 {code} 的前复权日线数据获取完成。")
-        print("所有股票前复权日线数据处理完成。")
+                    pbar.set_postfix_str(f"正在获取股票代码：{stock_code}，名称：{stock_name} 的日线数据...")
+                    self.fetch_and_update_stock_data(stock_code, pbar)
+                pbar.set_postfix_str(f"股票代码 {stock_code} 的前复权日线数据获取完成。")
+                pbar.update(1)
+        print("所有股票前复权日线数据获取完成。")
+
+    def fetch_and_update_stock_data(self, stock_code, pbar, start_date="19910101"):
+        """
+        获取单支股票的价格数据，计算其 KDJ 指标，更新内存中的数据并保存到 CSV 文件。
+
+        :param stock_code: 股票代码
+        :param pbar: 进度条对象，用于显示进度信息
+        :param start_date: 股票数据获取的起始日期，默认为19910101
+        """
+        exchange_prefix = "sh" if stock_code in self.code_name_map_sh else "sz"
+        df = self.fetch_price_data(exchange_prefix + stock_code, start_date=start_date)
+        if (df is None) and (datetime.now().time() > datetime.strptime("15:00", "%H:%M").time()):
+            pbar.set_postfix_str(f"股票代码 {stock_code} 不存在于数据集中。")
+            return
+        # 合并最新数据和历史数据
+        if stock_code in self.all_stocks_data:
+            combined_df = pd.concat([self.all_stocks_data[stock_code], df], ignore_index=True)
+        else:
+            combined_df = df
+        # 计算KDJ指标
+        kdj_data = self.calculate_kdj(combined_df)
+        # 检查 combined_df 中是否存在 K、D、J 列，如果存在则删除
+        columns_to_drop = ['K', 'D', 'J']
+        for col in columns_to_drop:
+            if col in combined_df.columns:
+                combined_df = combined_df.drop(columns=col)
+        # 合并 KDJ 数据
+        combined_df = pd.merge(combined_df, kdj_data, on='date')
+        # 更新内存中的数据
+        self.all_stocks_data[stock_code] = combined_df
+        # 保存数据到 CSV 文件
+        self.save_single_stock_data_to_csv(stock_code, self.all_stocks_data[stock_code])
+        pbar.set_postfix_str(f"股票代码 {stock_code} 的前复权日线数据更新完成。")
 
     @staticmethod
-    def fetch_price_data(stock_code, start_date="19910101", end_date=datetime.today().strftime("%Y%m%d")):
+    def fetch_price_data(stock_code, start_date, end_date=datetime.today().strftime("%Y%m%d")):
         """
         获取单支股票前复权日线数据。
         :param stock_code: 股票代码
-        :param start_date: 开始日期，默认为19910101
+        :param start_date: 开始日期
         :param end_date: 结束日期，默认为当前日期
         :return: 包含日期、开盘价、最高价、最低价、收盘价成交量、成交额和换手率的 DataFrame
         """
@@ -147,11 +166,14 @@ class StockPriceMonitor:
         """
         从 CSV 文件加载所有股票数据。
         """
-        if os.path.exists('stock_data'):
-            for file in os.listdir('../stock_data'):
-                if file.endswith('.csv'):
+        stock_data_dir = '../stock_data'
+        if os.path.exists(stock_data_dir):
+            csv_files = [file for file in os.listdir(stock_data_dir) if file.endswith('.csv')]
+            with tqdm(total=len(csv_files), desc="加载本地历史股票数据") as pbar:
+                for file in csv_files:
                     code = file.replace('.csv', '')
-                    self.all_stocks_data[code] = pd.read_csv(f'../stock_data/{file}')
+                    self.all_stocks_data[code] = pd.read_csv(f'{stock_data_dir}/{file}')
+                    pbar.update(1)
 
 
 if __name__ == "__main__":
