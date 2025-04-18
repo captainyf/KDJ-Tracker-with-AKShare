@@ -1,6 +1,6 @@
 # KDJ-Tracker-with-AKShare
 
-一个抓取A股个股K线数据、计算KDJ指标的Python示例，基于akshare框架开发。
+一个抓取A股个股K线数据、计算KDJ指标的Python简单示例，基于akshare框架开发。
 
 A Python example for crawling A-share individual stock K-line data and calculating the KDJ indicator, developed based on the akshare framework.
 
