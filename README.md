@@ -1,4 +1,4 @@
-# Stock-Indicator-Monitor
+# KDJ-Tracker-with-AKShare
 
 一个抓取A股个股K线数据、计算KDJ指标的Python示例，基于akshare框架开发。
 
