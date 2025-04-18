@@ -23,3 +23,5 @@ Additionally, ​​structural​​ investment opportunities require analysis c
 - [x] 计算日线的KDJ指标
 ## 判断买卖信号
 - [x] 基于日线的KDJ指标的买卖信号提示
+## 离线保存数据
+- [x] 离线保存数据至csv文件
